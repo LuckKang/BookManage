@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/tx
+       http://www.springframework.org/schema/tx/spring-tx.xsd
+       http://www.springframework.org/schema/aop
+       http://www.springframework.org/schema/aop/spring-aop.xsd">
+    <!--配置Datasource-->
+    <bean class="org.apache.commons.dbcp.BasicDataSource" id="dataSource">
+        <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"/>
+        <property name="url" value="jdbc:mysql://127.0.0.1:3306/bookmanager?characterEncoding=utf8&amp;useUnicode=true&amp;serverTimezone=Asia/Shanghai"/>
+        <property name="username" value="root"/>
+        <property name="password" value="123456"/>
+        <property name="initialSize" value="2"/><!--初始连接数-->
+        <property name="maxActive" value="10"/><!--最大连接数-->
+        <property name="minIdle" value="2"/> <!--空闲连接数-->
+    </bean>
+    <!--
+        SqlSessionFactoryBuilder->SqlSessionFactory(一直存在)->SqlSession
+        Spring如果对待各种ORM框架的：
+        JDBC：JdbcTemplate
+        Mybatis：SqlSessionTemplate
+        Hibernate: HibernateTemplate
+    -->
+    <bean class="org.mybatis.spring.SqlSessionFactoryBean" id="sessionFactory">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="mapperLocations" value="classpath:com/dao/*.xml"/>
+    </bean>
+    <!--扫描所有的Mapper接口，自动生成实现类-->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="sqlSessionFactoryBeanName" value="sessionFactory"/>
+        <property name="basePackage" value="com.dao"/>
+    </bean>
+
+    <!--配置事务管理-->
+    <bean id="transactionManager"
+            class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"/>
+    </bean>
+    <!--事务的规则
+        1、拒绝所有，允许个别——白名单，后台/管理员
+        2、允许所有，拒绝个别——黑名单，网站
+        A: at1:1000   ...at2:-100...    at3:900
+        B:     1000          ?             900
+    -->
+    <tx:advice id="transAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <tx:method name="*" read-only="true"/>
+            <tx:method name="*" propagation="REQUIRED"/>
+        </tx:attributes>
+    </tx:advice>
+    <tx:advice id="daoAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <tx:method name="*" read-only="true"/>
+        </tx:attributes>
+    </tx:advice>
+    <aop:config>
+        <aop:pointcut id="servicePointcut"
+                      expression="execution(* com.service..*.*(..))"/>
+        <aop:pointcut id="daoPointcut"
+                      expression="execution(* com.dao..*.*(..))"/>
+        <aop:advisor advice-ref="transAdvice" pointcut-ref="servicePointcut"/>
+        <aop:advisor advice-ref="daoAdvice" pointcut-ref="daoPointcut"/>
+    </aop:config>
+    <bean class="com.service.BookServiceImpl" id="bookService">
+        <property name="bookDaoMapper" ref="bookDaoMapper"/>
+    </bean>
+</beans>
